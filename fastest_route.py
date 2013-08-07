@@ -99,20 +99,27 @@ def sp_tag_single_source(graph, startNode, startTime, timeAllowed, dontvisit):
     stoptime = startTime + timeAllowed
     # have you seen how fast this is?
     heap = []
-    # below makes it so you cant walk across the station because that is stupid
-    # but maybe not a good idea because you do it anyway
-    # it is also slightly slower, and will not matter with post processing
-    # graph[startNode] = {k: v for k, v in graph[startNode].items() if v != 'walking'}
+    # if there is still a node to process
     while startNode:
+        # create a subgraph with all connections from that startNode
         subgraph = graph[startNode]
+        # loop through each neighboring station (usually only one or two)
         for neighbor in subgraph.iterkeys():
+            # make sure neighbor is not in same station complex and has trains that leave it
             if neighbor not in dontvisit and neighbor in graph:
+                # send the subgraph, node, time to findnext to get the next train connection
                 endtime = findnext(subgraph, neighbor, startTime)
+                # if there is a train and the train is before the stoptime and faster than previous times
                 if endtime and endtime < mydict.get(neighbor, stoptime): 
+                    # add it to the dictionary of fastest time to each neighbor
                     mydict[neighbor] = endtime 
+                    # throw it at the heap which is our queue for the next startNode
                     heapq.heappush(heap, (endtime, neighbor))
+                    # this saves the path to each node which is nice for maps etc
                     # pathdict[neighbor] = pathdict[startNode] + [(neighbor, endtime)]
+        # if there are more nodes to go to
         if heap:
+            # grab the first value from heap, which is the one with smallest time value
             startTime, startNode = heapq.heappop(heap)
         else:
             break
@@ -120,7 +127,7 @@ def sp_tag_single_source(graph, startNode, startTime, timeAllowed, dontvisit):
 
 def findpossibletimes(graph, node):
     """flatten the dict to find all possible times for departure"""
-    # this script is called for each node to find possible departure times
+    # this function is called for each node to find possible departure times
     # then each time will be fed to the sp_tag function with the node
     # blank list
     mylist = []
@@ -128,24 +135,11 @@ def findpossibletimes(graph, node):
     for edge in graph[node].iterkeys():
         # all these walking if clauses make me think it should be an object
         if graph[node][edge] != 'walking':
+            # loop through every start and endtime
             for startTime, endTime in graph[node][edge]:
                 # add each start time to mylist
                 mylist += [startTime]
     return mylist
-
-# idea to only send the part of the graph within the time contraint
-# this does not seem to be working and is not speeding it up at all
-def prunegraph(graph, starttime, timeallowed):
-    outgraph = dict(graph.items())
-    endtime = starttime + timeallowed
-    for node in outgraph.iterkeys():
-        for edge in outgraph[node]:
-            # print outgraph[node][edge]
-            if outgraph[node][edge] != 'walking':
-                for count,(x, y) in enumerate(outgraph[node][edge]):
-                    if x < starttime and y > endtime:
-                        del outgraph[node][edge][count]
-    return outgraph
 
 def run(inputnodes, transfers, timeAllowed):
     """garbage function to feed shit"""
