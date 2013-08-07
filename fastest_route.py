@@ -15,10 +15,13 @@ INSERTSTR = 'insert into raw_graph values ("'
 
 def parseoutput(infilepath, has_headers):
     """parse a | seperated file from sqlite"""
+    # open up the file
     f = open(infilepath)
     # this is my way to handle some files having headers and some not
     if has_headers == True:
+        # read off the headers 
         x = f.readline()
+    # for each row in infile strip off newlines and split
     mylist = [r.strip().split('|') for r in f]
     return mylist
 
@@ -27,9 +30,10 @@ def processtime(intime):
     # just setting it to a day
     # actually a problem because there are quite a few morning ones
     # so we are not accurate in the morning
+    # trains that run overnight are actually a problem for me with how i define time
+    # so i am not allowing it making my results invalid in the morning hours
     year, month, day = 2013, 8, 1
     hour, minute, second = map(int, intime.split(':'))
-    
     if hour >= 24:
         # set the hour to the remainder because datetime objects limit to 24  
         day += 1
@@ -48,7 +52,7 @@ def processtransitlist(inlist):
         # if the to_node is not in the dict for from node then create blank list
         if to_node not in mydict[from_node]:
             mydict[from_node][to_node] = []
-        # set 
+        # add the times to the list for the from and to node
         mydict[from_node][to_node].append((start_time, end_time))
     # loop through each dict of dict and sort its time list to save time later
     for i in mydict:
@@ -92,6 +96,7 @@ def findnext(subgraph,neighbor, startTime):
 
 def sp_tag_single_source(graph, startNode, startTime, timeAllowed, dontvisit):
     """find all nodes connected to startNode starting at startTime for time allowed"""
+    # create some blank dicts and heap for good fun looping
     mydict = {}  
     pathdict = {}
     mydict[startNode] = startTime
@@ -129,7 +134,6 @@ def findpossibletimes(graph, node):
     """flatten the dict to find all possible times for departure"""
     # this function is called for each node to find possible departure times
     # then each time will be fed to the sp_tag function with the node
-    # blank list
     mylist = []
     # loop through the keys
     for edge in graph[node].iterkeys():
@@ -153,7 +157,6 @@ def run(inputnodes, transfers, timeAllowed):
     for fromnode,tonode in transfers:
         if fromnode in graph:
             graph[fromnode][tonode] = 'walking'
-    
     # now we are looping to start sending things to sp_tag
     for node in [x for x in sorted(graph) if x[0] in ['R','S']]:
         # start a timer so we can check out speeds
@@ -168,12 +171,6 @@ def run(inputnodes, transfers, timeAllowed):
             outdict[t] = sp_tag_single_source(graph, node, t, timeAllowed, dontvisit)
             for i,j in outdict[t].items():
                 print INSERTSTR + '","'.join(map(str, [node, t, i, j, j - t])) + '");'
-        # throw the outdict into the shelve
-        #db[node] = outdict
-        # we could speed this up slightly by syncing less often
-        #db.sync()
-        # let people know that a node is finished and the time it took
-        #print node, time.time() - t1
     return True
 
 def main():
@@ -183,15 +180,11 @@ def main():
     timeAllowed = sys.argv[3]
     # timeallowed needs to be a timedelta object
     timeAllowed = datetime.timedelta(0,int(timeAllowed))
-    # i should actually feed the db in the right way, but no one else likes shelve
-    # would be more practical throwing it to sqlite anyway
-    global db
+    # i am having this print a sql file that can by piped
     print 'begin;'
-    #db = shelve.open('tester2.db')
     # throw everything at run
     run(inputnodes, transfers, timeAllowed)
     print 'commit;'
-    #db.close()
     print True
 
 if __name__ == '__main__':
