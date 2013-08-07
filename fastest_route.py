@@ -1,7 +1,9 @@
 #### mike mommsen
 #### august 2013
 #### sp-tag from single source for gtfs data
-####
+#### to run do something like : python fastest_route.py gtfs_edges.txt transfers.txt 3600
+#### gtfs_edges.txt is just the stop_times.txt file joined on itself on stop_sequence = stop_sequence -1
+#### outputs basic sql to input into a database and actually do some work with
 #### question to mikemommsen@gmail.com
 
 import datetime
@@ -11,6 +13,7 @@ import sys
 import heapq
 import shelve
 
+# string that is the start of my insert string
 INSERTSTR = 'insert into raw_graph values ("'
 
 def parseoutput(infilepath, has_headers):
