@@ -55,14 +55,19 @@ def processlist(inlist):
         newlist = []
         # zip together the start and end lists for easy math
         date, desc, entry, exit = zip(start, end)
+        # time difference is end time minus start time
         timedelta = date[1] - date[0]
+        # we want to keep the descriptions, and start and end times as well
         starttime, endtime = date
         startdesc, enddesc = desc
+        # entry and exit deltas are the differences from end to start
         entrydelta = entry[1] - entry[0]
         exitdelta = exit[1] - exit[0]
-        # make sure that the count is postive and
+        # make sure that the count is postive and not insanely huge
+        # these are both real problems that appear in the data
         if 100000 > entrydelta >= 0 and 100000 > exitdelta >= 0:
             newlist = [starttime, endtime, startdesc, enddesc, timedelta, entrydelta, exitdelta]
+            # add each element to the output list
             mylist.append(newlist)
     return mylist
 
@@ -71,18 +76,26 @@ def mergeDeltaTuples(intuples):
     # functions like this make me think that this should be a class for sure
     # zip together the input tuples (there are always two)
     merged = zip(*intuples)
+    # the starttime is the smallest starttime
     starttime = min(merged[0])
+    # the endtime is the largest endtime
     endtime = max(merged[1])
+    # descriptions are strings so we will take both of them
     startdesc = intuples[0][2]
     enddesc = intuples[-1][3]
+    # the time difference is going to be the sum of the two timedeltas coming in
     timedelta = merged[4][0] + merged[4][1]
+    # and same for entrys and exits
     entrydelta = merged[5][0] + merged[5][1]
     exitdelta = merged[6][0] + merged[6][1]
     return [starttime, endtime, startdesc, enddesc, timedelta, entrydelta, exitdelta]
 
 def splitFunction(inlist, ratio, starttime):
-    """takes a list from turnstile data and splits it based off of a ratio"""
+    """takes a list from turnstile data and splits it based off of time ratio"""
+    # midtime is the time that the four hour timespan ends at
+    # which must equal start time plus four hours
     midtime = starttime + datetime.timedelta(0, 14400)
+    #
     endtime = inlist[1]
     startdesc = inlist[2]
     middesc = 'SPLIT'
