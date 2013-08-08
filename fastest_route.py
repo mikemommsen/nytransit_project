@@ -164,7 +164,8 @@ def processoutdict(indict):
         for tonode, arrivaltime in values.items():
             mydict[tonode] += [[starttime, arrivaltime]]
     for tonode  in mydict:
-        for count, (starttime,arrivaltime) in enumerate(mydict[tonode]):
+        mydict[tonode] = set(mydict[tonode])
+        for count, (starttime, arrivaltime) in enumerate(mydict[tonode]):
             comparelist = [[x,y] for x,y in mydict.itervalues() if x > starttime and y < arrivaltime]
             if comparelist:
                 del mydict[tonode][count]
@@ -192,10 +193,11 @@ def run(inputnodes, transfers, timeAllowed):
             # loop through each possible transfer time
             for t in findpossibletimes(graph, node):
                 # send to the sp_tag function
-                outdict[node, t] = sp_tag_single_source(graph, node, t, timeAllowed, group)
-                for i,j in outdict[t].items():
-                    print INSERTSTR + '","'.join(map(str, [node, t, i, j, j - t])) + '");'
-        processoutdict(outdict)
+                outdict[node, t] = sp_tag_single_source(graph, node, t, timeAllowed, group)                    
+        outdict = processoutdict(outdict)
+        for i in outdict:
+            for endtime, starttime in outdict[i]:
+                print INSERTSTR + '","'.join(map(str, [group[0],i,starttime,endtime,endtime-starttime])) + '");'
     return True
 
 def main():
