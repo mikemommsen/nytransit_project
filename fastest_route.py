@@ -156,7 +156,20 @@ def groupStations(transfersList):
         if myset not in mylist:
             mylist.append(myset)
     return mylist
-
+    
+def processoutdict(indict):
+    mydict = defaultdict(list)
+    for fromnode, starttime in indict:
+        values = indict[fromnode, starttime]
+        for tonode, arrivaltime in values.items():
+            mydict[tonode] += [[starttime, arrivaltime]]
+    for tonode  in mydict:
+        for count, (starttime,arrivaltime) in enumerate(mydict[tonode]):
+            comparelist = [[x,y] for x,y in mydict.itervalues() if x > starttime and y < arrivaltime]
+            if comparelist:
+                del mydict[tonode][count]
+    return mydict
+        
 def run(inputnodes, transfers, timeAllowed):
     """garbage function to feed shit"""
     # throw the input text file to parseoutput to create a basic list
@@ -172,18 +185,17 @@ def run(inputnodes, transfers, timeAllowed):
             graph[fromnode][tonode] = 'walking'
     # now we are looping to start sending things to sp_tag
     for group in loopingnodes:
-        # start a timer so we can check out speeds
-        t1 = time.time()
-        # make it so it can not visit other nodes that it is connected to
-        dontvisit = [y for x, y in transfers if x == node]
-        # loop through each possible transfer time
-        for t in findpossibletimes(graph, node):
-            #tempgraph = prunegraph(graph, t, timeAllowed)
-            outdict = {}
-            # send to the sp_tag function
-            outdict[t] = sp_tag_single_source(graph, node, t, timeAllowed, dontvisit)
-            for i,j in outdict[t].items():
-                print INSERTSTR + '","'.join(map(str, [node, t, i, j, j - t])) + '");'
+        outdict = {}
+        for node in group:
+            # start a timer so we can check out speeds
+            t1 = time.time()
+            # loop through each possible transfer time
+            for t in findpossibletimes(graph, node):
+                # send to the sp_tag function
+                outdict[node, t] = sp_tag_single_source(graph, node, t, timeAllowed, group)
+                for i,j in outdict[t].items():
+                    print INSERTSTR + '","'.join(map(str, [node, t, i, j, j - t])) + '");'
+        processoutdict(outdict)
     return True
 
 def main():
