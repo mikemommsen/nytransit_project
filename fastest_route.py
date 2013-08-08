@@ -12,6 +12,7 @@ from collections import defaultdict
 import sys
 import heapq
 import shelve
+from itertools import groupby
 
 # string that is the start of my insert string
 INSERTSTR = 'insert into raw_graph values ("'
@@ -147,6 +148,14 @@ def findpossibletimes(graph, node):
                 # add each start time to mylist
                 mylist += [startTime]
     return mylist
+    
+def groupStations(transfersList):
+    mylist = []
+    for key,group in groupby(transfersList, key=lambda x: x[0]):
+        myset = set([x for a in group for x in a])
+        if myset not in mylist:
+            mylist.append(myset)
+    return mylist
 
 def run(inputnodes, transfers, timeAllowed):
     """garbage function to feed shit"""
@@ -156,12 +165,13 @@ def run(inputnodes, transfers, timeAllowed):
     graph = processtransitlist(graph)
     # process the transfers, which have headers in this case (stupid me)
     transfers = parseoutput(transfers, True)
+    loopingnodes = groupStations(transfers)
     # add the walking transfers to the graph maybe should be different function
     for fromnode,tonode in transfers:
         if fromnode in graph:
             graph[fromnode][tonode] = 'walking'
     # now we are looping to start sending things to sp_tag
-    for node in [x for x in sorted(graph) if x[0] in ['R','S']]:
+    for group in loopingnodes:
         # start a timer so we can check out speeds
         t1 = time.time()
         # make it so it can not visit other nodes that it is connected to
