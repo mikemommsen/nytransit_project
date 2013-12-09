@@ -16,6 +16,19 @@ from itertools import groupby
 
 # string that is the start of my insert string
 INSERTSTR = 'insert into raw_graph values ("'
+GOOD_TIMES = [0,4,8,12,16,20]
+GOOD_TIMES = [datetime.timedelta(t) for t in GOOD_TIMES]
+
+# endnodes are needed to know when the station should not be added to the heap and searched. this could be done in a less static way but it was not. gfy.
+ENDNODES = ['101','101N','101S','201','201N','201S','247','247N',
+	'247S','257','257N','257S','301','301N','301S','401',
+	'401N','401S','501','501N','501S','601','601N','601S',
+	'701','701N','701S','A02','A02N','A02S','A65','A65N',
+	'A65S','D01','D01N','D01S','D43','D43N','D43S','E01',
+	'E01N','E01S','F01','F01N','F01S','G05','G05N','G05S',
+	'H11','H11N','H11S','H15','H15N','H15S','L29','L29N',
+	'L29S','M01','M01N','M01S','M23','M23N','M23S','R01',
+	'R01N','R01S','R45','R45N','R45S']
 
 def parseoutput(infilepath, has_headers):
     """parse a | seperated file from sqlite"""
@@ -101,6 +114,7 @@ def findnext(subgraph,neighbor, startTime):
 def sp_tag_single_source(graph, startNode, startTime, timeAllowed, dontvisit):
     """find all nodes connected to startNode starting at startTime for time allowed"""
     # create some blank dicts and heap for good fun looping
+    innode = startNode
     mydict = {}  
     pathdict = {}
     mydict[startNode] = startTime
@@ -123,7 +137,8 @@ def sp_tag_single_source(graph, startNode, startTime, timeAllowed, dontvisit):
                     # add it to the dictionary of fastest time to each neighbor
                     mydict[neighbor] = endtime 
                     # throw it at the heap which is our queue for the next startNode
-                    heapq.heappush(heap, (endtime, neighbor))
+                    if neighbor not in ENDNODES:
+                        heapq.heappush(heap, (endtime, neighbor))
                     # this saves the path to each node which is nice for maps etc
                     # pathdict[neighbor] = pathdict[startNode] + [(neighbor, endtime)]
         # if there are more nodes to go to
@@ -132,6 +147,7 @@ def sp_tag_single_source(graph, startNode, startTime, timeAllowed, dontvisit):
             startTime, startNode = heapq.heappop(heap)
         else:
             break
+    del mydict[innode]
     return mydict
 
 def findpossibletimes(graph, node):
@@ -151,25 +167,46 @@ def findpossibletimes(graph, node):
     
 def groupStations(transfersList):
     mylist = []
-    for key,group in groupby(transfersList, key=lambda x: x[0]):
+    for key,group in groupby(sorted(transfersList), key=lambda x: x[0]):
         myset = set([x for a in group for x in a])
         if myset not in mylist:
             mylist.append(myset)
-    return mylist
+    return sorted([sorted(x) for x in mylist])
     
-def processoutdict(indict):
+def processoutdict(indict, transferList):
     mydict = defaultdict(list)
+    stationGroups = groupStations(transferList)
     for fromnode, starttime in indict:
         values = indict[fromnode, starttime]
         for tonode, arrivaltime in values.items():
+            tonode = [x[0] for x in stationGroups if tonode in x][0]
             mydict[tonode] += [[starttime, arrivaltime]]
-    for tonode  in mydict:
-        mydict[tonode] = set(mydict[tonode])
+    for tonode in mydict:
         for count, (starttime, arrivaltime) in enumerate(mydict[tonode]):
-            comparelist = [[x,y] for x,y in mydict.itervalues() if x > starttime and y < arrivaltime]
-            if comparelist:
-                del mydict[tonode][count]
-    return mydict
+            for x,y in mydict[tonode]:
+                if x > starttime and y < arrivaltime:
+                    del mydict[tonode][count]
+                    break
+    outdict = {}
+    for tonode in mydict:
+        outdict[tonode] = []
+        loopinglist = [(a.hour, a , b) for a,b in sorted(mydict[tonode]) if a.day == 1 and b.day == 1]
+        for h in range(0,24,4):
+            timelist = [(y,z) for x,y,z in loopinglist if h <= x < (h + 4)]
+            counter, starttime = 0, datetime.datetime(2013,8,1, h)
+            if timelist:
+                penalty = (starttime + datetime.timedelta(0,14400)) - timelist[-1][0]
+                penalty = penalty.total_seconds() / len(timelist)
+                lastdeparture = starttime
+                for departuretime, arrivaltime in sorted(timelist):
+                    wait = (departuretime - lastdeparture).total_seconds() + penalty
+                    averagewait = (arrivaltime - departuretime).total_seconds() + (wait / 2)
+                    counter += (wait / 14400.) * averagewait
+                    lastdeparture = departuretime
+            # this is the time after the last subway until the end of the 4 hours
+            
+                outdict[tonode] += [[starttime,datetime.timedelta(0,int(counter))]]
+    return outdict
         
 def run(inputnodes, transfers, timeAllowed):
     """garbage function to feed shit"""
@@ -185,19 +222,24 @@ def run(inputnodes, transfers, timeAllowed):
         if fromnode in graph:
             graph[fromnode][tonode] = 'walking'
     # now we are looping to start sending things to sp_tag
+    rowid = 0
+    # below is to do just a limited run
+    # loopingnodes = [x for x in loopingnodes if '127N' in x]
     for group in loopingnodes:
         outdict = {}
-        for node in group:
+        for node in (x for x in group if x in graph):
             # start a timer so we can check out speeds
             t1 = time.time()
             # loop through each possible transfer time
             for t in findpossibletimes(graph, node):
                 # send to the sp_tag function
-                outdict[node, t] = sp_tag_single_source(graph, node, t, timeAllowed, group)                    
-        outdict = processoutdict(outdict)
-        for i in outdict:
-            for endtime, starttime in outdict[i]:
-                print INSERTSTR + '","'.join(map(str, [group[0],i,starttime,endtime,endtime-starttime])) + '");'
+                outdict[node, t] = sp_tag_single_source(graph, node, t, timeAllowed, list(group))                    
+        outdict = processoutdict(outdict, transfers)
+        for i in sorted(outdict):
+            for starttime, counter in sorted(outdict[i]):
+                if counter.total_seconds() < 3601:
+                    rowid += 1
+                    print INSERTSTR + '","'.join(map(str, [rowid, group[0],i,starttime,counter])) + '");'
     return True
 
 def main():
@@ -212,7 +254,6 @@ def main():
     # throw everything at run
     run(inputnodes, transfers, timeAllowed)
     print 'commit;'
-    print True
 
 if __name__ == '__main__':
     main()
